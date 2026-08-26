@@ -1,6 +1,6 @@
 ---
 publishDate: 2026-08-25
-title: MyosaCentinela
+title: CENTINELA
 excerpt: A wearable safety device for lone/remote workers that detects falls with an on-device (embedded) ML model, sounds a buzzer alarm the worker can cancel with a gesture, and reports live over WiFi or a private LoRa gateway.
 image: myosa-centinela/cover.jpg
 tags:
@@ -27,11 +27,11 @@ Special thanks to **Frank Luis Monsalve Morillo** for his help with everything r
 
 We're from Colombia's Caribbean coast, and out here the heat is no small thing — on a lot of days it's brutal enough on its own. Now picture a worker out alone in a field, a farm, a plant, somewhere off on their own with no one nearby: a heat stroke, a fainting spell for any reason, a hard blow to the head that knocks them down. Nobody sees it happen. There's often no cell signal to call for help either. In that situation, the most likely outcome is that help arrives too late — or doesn't arrive in time to save them at all. That's the exact problem **CENTINELA** was built to close, and the MYOSA kit's components are what let us actually build it.
 
-**MyosaCentinela** is a wearable safety device for lone or remote worker monitoring ("lone worker safety"). An ESP32 with a small suite of I2C sensors continuously tracks the wearer's orientation and motion; when it recognizes the pattern of a fall, it doesn't just react to the instant of impact — it evaluates roughly three seconds of what happens *after* the trigger, because a real fall is followed by stillness, while a false alarm (setting the device down, a hard step) is not. If the model decides it's a real fall, an onboard buzzer sounds an alarm that gets progressively faster over 10 seconds; the worker can cancel it at any time with a simple gesture sequence (any pair of opposite swipes — left→right, right→left, up→down, or down→up) detected by the onboard gesture sensor. Only if nobody cancels within that window does the event escalate.
+**CENTINELA** is a wearable safety device for lone or remote worker monitoring ("lone worker safety"). An ESP32 with a small suite of I2C sensors continuously tracks the wearer's orientation and motion; when it recognizes the pattern of a fall, it doesn't just react to the instant of impact — it evaluates roughly three seconds of what happens *after* the trigger, because a real fall is followed by stillness, while a false alarm (setting the device down, a hard step) is not. If the model decides it's a real fall, an onboard buzzer sounds an alarm that gets progressively faster over 10 seconds; the worker can cancel it at any time with a simple gesture sequence (any pair of opposite swipes — left→right, right→left, up→down, or down→up) detected by the onboard gesture sensor. Only if nobody cancels within that window does the event escalate.
 
 **A note on scope:** our original proposal framed the target signal as "abnormal immobility" in general — heat stroke, fainting, dehydration, or a fall can all leave a worker motionless. In practice, a fall is the one of those events an IMU can detect with high confidence and low ambiguity: it has both a distinctive kinematic signature (an impact or free-fall spike) and a reliable aftermath (the wearer goes still). Heat stroke or fainting *without* an accompanying fall don't produce that same spike, so falls became the first fully-implemented proxy for immobility — the trigger the shipped classifier is actually trained and validated on. A fall-independent check (an alert if no motion at all is seen for several minutes, regardless of what preceded it) would extend coverage to those other cases, and is the natural next addition — but it isn't part of the detector shipped here.
 
-**What problem it solves:** in field work (industrial, agricultural, mining, etc.) a lone worker can fall, get hurt, or lose consciousness with nobody around to notice — and there's often no cellphone signal to call for help. MyosaCentinela aims to close that gap with low-cost hardware that (a) makes the fall-detection decision **on the device itself**, so it works even with no WiFi, no cellular data, and no PC nearby, and (b) still gives the worker a fast, deliberate way to dismiss a false alarm before it escalates, instead of spamming false positives.
+**What problem it solves:** in field work (industrial, agricultural, mining, etc.) a lone worker can fall, get hurt, or lose consciousness with nobody around to notice — and there's often no cellphone signal to call for help. CENTINELA aims to close that gap with low-cost hardware that (a) makes the fall-detection decision **on the device itself**, so it works even with no WiFi, no cellular data, and no PC nearby, and (b) still gives the worker a fast, deliberate way to dismiss a false alarm before it escalates, instead of spamming false positives.
 
 **Who it's for:** safety supervisors in industrial/field settings who need basic fall detection and live monitoring for workers in areas with poor or no cellular coverage.
 
@@ -52,46 +52,46 @@ We're from Colombia's Caribbean coast, and out here the heat is no small thing �
 ### Images
 
 <p align="center">
-  <img src="final-device-worn.jpg" width="800"><br/>
-  <i>The final MyosaCentinela wearable, 3D-printed enclosure in white</i>
+  <img src="/assets/images/myosa-centinela/final-device-worn.jpg" width="800"><br/>
+  <i>The final CENTINELA wearable, 3D-printed enclosure in white</i>
 </p>
 
 <p align="center">
-  <img src="device-active.jpg" width="800"><br/>
+  <img src="/assets/images/myosa-centinela/device-active.jpg" width="800"><br/>
   <i>Device powered on: OLED status readout, gesture sensor, and 18650 cell visible</i>
 </p>
 
 <p align="center">
-  <img src="dashboard-normal.png" width="800"><br/>
+  <img src="/assets/images/myosa-centinela/dashboard-normal.png" width="800"><br/>
   <i>The live Control Room dashboard during normal operation — acceleration, temperature, and pressure gauges, plus the live acceleration chart</i>
 </p>
 
 <p align="center">
-  <img src="dashboard-fall-confirmed.png" width="800"><br/>
+  <img src="/assets/images/myosa-centinela/dashboard-fall-confirmed.png" width="800"><br/>
   <i>The Control Room dashboard after a fall alert went unconfirmed by the worker and escalated</i>
 </p>
 
 **Build process:** the first enclosure iteration was printed in black; we later moved to white for the final version after running out of the original filament and revising the fit based on what we learned from the black prototype.
 
 <p align="center">
-  <img src="assembly-bench.jpg" width="800"><br/>
+  <img src="/assets/images/myosa-centinela/assembly-bench.jpg" width="800"><br/>
   <i>Sensors on the bench during integration: APDS9960 gesture sensor, OLED (showing BMP180 readings), and the ESP32 dev board</i>
 </p>
 
 <p align="center">
-  <img src="first-prototype-black.jpg" width="800"><br/>
+  <img src="/assets/images/myosa-centinela/first-prototype-black.jpg" width="800"><br/>
   <i>First enclosure iteration (black), alongside the Heltec HT-M7603 gateway and the MYOSA kit</i>
 </p>
 
 <p align="center">
-  <img src="team-with-device.jpg" width="800"><br/>
+  <img src="/assets/images/myosa-centinela/team-with-device.jpg" width="800"><br/>
   <i>The team with the final device</i>
 </p>
 
 ### Videos
 
 <video controls width="100%">
-  <source src="myosa-centinela-demo.mp4" type="video/mp4">
+  <source src="/myosa-centinela-demo.mp4" type="video/mp4">
 </video>
 
 ---
@@ -169,6 +169,7 @@ python tools/export_model_to_c.py recordings/session_a ...  # regenerates main/f
 * **BMP180** — temperature / pressure / altitude
 * **APDS9960** — gesture recognition (official Espressif driver, vendored with local patches)
 * **OLED SSD1306** — onboard status display
+* **18650 Li-ion battery** — portable power supply
 * **Seeed Wio-E5** — LoRa module (UART, AT command interface)
 * **Heltec HT-M7603** — private LoRaWAN indoor gateway (OpenWrt + LuCI, Semtech UDP packet-forwarder mode)
 * **scikit-learn** — Random Forest classifier (trained on the PC)
@@ -195,7 +196,7 @@ python tools/data_recorder.py --label demo --udp-listen 5005
 ## File Structure (Optional)
 
 ```
-/MyosaCentinela
+/CENTINELA
 ├─ main/
 │  ├─ myosa_field_main.c      (combined field firmware: sensors + embedded fall detector + buzzer + WiFi/LoRa)
 │  ├─ fall_model.h            (Random Forest, generated by tools/export_model_to_c.py - do not hand-edit)
