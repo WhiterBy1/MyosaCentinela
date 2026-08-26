@@ -52,46 +52,46 @@ We're from Colombia's Caribbean coast, and out here the heat is no small thing â
 ### Images
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/final-device-worn.jpg" width="800"><br/>
+  <img src="final-device-worn.jpg" width="800"><br/>
   <i>The final MyosaCentinela wearable, 3D-printed enclosure in white</i>
 </p>
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/device-active.jpg" width="800"><br/>
+  <img src="device-active.jpg" width="800"><br/>
   <i>Device powered on: OLED status readout, gesture sensor, and 18650 cell visible</i>
 </p>
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/dashboard-normal.png" width="800"><br/>
+  <img src="dashboard-normal.png" width="800"><br/>
   <i>The live Control Room dashboard during normal operation â€” acceleration, temperature, and pressure gauges, plus the live acceleration chart</i>
 </p>
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/dashboard-fall-confirmed.png" width="800"><br/>
+  <img src="dashboard-fall-confirmed.png" width="800"><br/>
   <i>The Control Room dashboard after a fall alert went unconfirmed by the worker and escalated</i>
 </p>
 
 **Build process:** the first enclosure iteration was printed in black; we later moved to white for the final version after running out of the original filament and revising the fit based on what we learned from the black prototype.
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/assembly-bench.jpg" width="800"><br/>
+  <img src="assembly-bench.jpg" width="800"><br/>
   <i>Sensors on the bench during integration: APDS9960 gesture sensor, OLED (showing BMP180 readings), and the ESP32 dev board</i>
 </p>
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/first-prototype-black.jpg" width="800"><br/>
+  <img src="first-prototype-black.jpg" width="800"><br/>
   <i>First enclosure iteration (black), alongside the Heltec HT-M7603 gateway and the MYOSA kit</i>
 </p>
 
 <p align="center">
-  <img src="/assets/images/myosa-centinela/team-with-device.jpg" width="800"><br/>
+  <img src="team-with-device.jpg" width="800"><br/>
   <i>The team with the final device</i>
 </p>
 
 ### Videos
 
 <video controls width="100%">
-  <source src="/myosa-centinela-demo.mp4" type="video/mp4">
+  <source src="myosa-centinela-demo.mp4" type="video/mp4">
 </video>
 
 ---
