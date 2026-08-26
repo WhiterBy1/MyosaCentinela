@@ -1,51 +1,50 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-H21 | ESP32-H4 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | --------- | -------- | -------- | -------- | -------- |
+# MyosaCentinela (CENTINELA) — MYOSA 6.0 Submission
 
-# Basic I2C Master Example
+**👉 For the full project write-up (overview, demo photos/video, features, usage instructions, tech stack) go to the official submission document:**
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## [`myosa-centinela/myosa-centinela.md`](myosa-centinela/myosa-centinela.md)
 
-## Overview
+That file follows the mandatory MYOSA blog submission format and is the primary deliverable for review. Everything below is just a quick map for anyone browsing the code directly.
 
-This example demonstrates basic usage of I2C driver by reading and writing from a I2C connected sensor:
+---
 
-If you have a new I2C application to go (for example, read the temperature data from external sensor with I2C interface), try this as a basic template, then add your own code.
+## Repository layout
 
-## How to use example
-
-### Hardware Required
-
-To run this example, you should have an Espressif development board based on a chip listed in supported targets as well as a MPU9250. MPU9250 is a inertial measurement unit, which contains a accelerometer, gyroscope as well as a magnetometer, for more information about it, you can read the [datasheet of the MPU9250 sensor](https://invensense.tdk.com/wp-content/uploads/2015/02/PS-MPU-9250A-01-v1.1.pdf).
-
-#### Pin Assignment
-
-**Note:** The following pin assignments are used by default, you can change these in the `menuconfig` .
-
-|                  | SDA             | SCL           |
-| ---------------- | -------------- | -------------- |
-| ESP I2C Master   | I2C_MASTER_SDA | I2C_MASTER_SCL |
-| MPU9250 Sensor   | SDA            | SCL            |
-
-For the actual default value of `I2C_MASTER_SDA` and `I2C_MASTER_SCL` see `Example Configuration` in `menuconfig`.
-
-**Note:** There's no need to add an external pull-up resistors for SDA/SCL pin, because the driver will enable the internal pull-up resistors.
-
-### Build and Flash
-
-Enter `idf.py -p PORT flash monitor` to build, flash and monitor the project.
-
-(To exit the serial monitor, type ``Ctrl-]``.)
-
-See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
-
-## Example Output
-
-```bash
-I (328) example: I2C initialized successfully
-I (338) example: WHO_AM_I = 71
-I (338) example: I2C de-initialized successfully
+```
+/MyosaCentinela
+├─ myosa-centinela/            <- START HERE: the submission write-up, photos, and demo video
+│  ├─ myosa-centinela.md
+│  ├─ *.jpg / *.png            (hardware photos, dashboard screenshots)
+│  └─ myosa-centinela-demo.mp4
+├─ main/
+│  ├─ myosa_field_main.c       <- combined field firmware (sensors + embedded fall detector + buzzer + WiFi/LoRa)
+│  ├─ fall_model.h             (embedded Random Forest, generated - see tools/export_model_to_c.py)
+│  └─ fall_model_wrap.cpp
+├─ components/
+│  └─ espressif__apds9960/     (gesture sensor driver, vendored)
+├─ tools/
+│  ├─ data_recorder.py         (recorder + live "Control Room" dashboard backend: serial / WiFi UDP / LoRa)
+│  ├─ recorder_dashboard.html  (live monitoring dashboard)
+│  ├─ fall_features.py / analyze_fall_features.py / train_fall_model.py / export_model_to_c.py
+│  └─ fall_model.joblib        (PC-side trained model)
+└─ paquete_amigo/              (minimal package for third-party testers - recorder + dashboard only)
 ```
 
-## Troubleshooting
+## Quick start (firmware)
 
-(For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you as soon as possible.)
+```bash
+idf.py build
+idf.py -p COMx flash monitor
+```
+
+## Quick start (live monitoring dashboard)
+
+```bash
+python tools/data_recorder.py --label demo --udp-listen 5005   # WiFi
+# or
+python tools/data_recorder.py --label demo --lora-listen 1700  # LoRa gateway
+```
+
+Then open **http://localhost:8766**.
+
+Full details for all of this — including *why* it's built this way — are in [`myosa-centinela/myosa-centinela.md`](myosa-centinela/myosa-centinela.md).
