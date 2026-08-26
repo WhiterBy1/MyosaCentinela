@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MyosaCentinela - Dashboard LoRa (campo)</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171d2e; --panel2: #1e2740; --text: #e8ecf5;
+    --muted: #8a92a8; --accent: #5b8cff; --good: #3ecf8e; --bad: #ff6b6b;
+    --warn: #ffb84d; --border: #2a3350;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    margin: 0; padding: 20px; line-height: 1.4;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+  }
+  h1 { font-size: 19px; margin: 0; }
+  h1 .sub { color: var(--muted); font-weight: 400; font-size: 12px; display: block; margin-top: 2px; }
+  h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px;
+    border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--panel2);
+    border: 1px solid var(--border);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .dot.off { background: var(--bad); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+  .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .metric .val { font-size: 26px; font-weight: 700; transition: color 0.4s ease; }
+  .metric .unit { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .metric .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+  canvas { width: 100%; background: #0b0f18; border: 1px solid var(--border); border-radius: 8px; display: block; }
+  .bubble-wrap { display: flex; justify-content: center; margin-top: 8px; }
+  .stat-inline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .stat-inline b { color: var(--text); }
+  .sig-good { color: var(--good); }
+  .sig-warn { color: var(--warn); }
+  .sig-bad { color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MyosaCentinela &mdash; Dashboard de campo (LoRa)
+    <span class="sub">Gateway HT-M7603 &rarr; Ethernet &rarr; servidor local &middot; sin WiFi ni internet</span>
+  </h1>
+  <span class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">Esperando paquetes...</span></span>
+</header>
+
+<div class="grid">
+  <div class="panel metric">
+    <div class="val" id="mRoll">--</div><div class="unit">grados roll</div>
+    <div class="lbl">Orientacion</div>
+  </div>
+  <div class="panel metric">
+    <div class="val" id="mPitch">--</div><div class="unit">grados pitch</div>
+    <div class="lbl">Orientacion</div>
+  </div>
+  <div class="panel metric">
+    <div class="val" id="mTemp">--</div><div class="unit">C</div>
+    <div class="lbl">Temperatura</div>
+  </div>
+  <div class="panel metric">
+    <div class="val" id="mRssi">--</div><div class="unit">dBm</div>
+    <div class="lbl">Senal (RSSI)</div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Orientacion en vivo (roll / pitch)</h2>
+    <canvas id="chartOrient" height="150"></canvas>
+    <div class="stat-inline">
+      <span>Yaw: <b id="mYaw">--</b> deg</span>
+      <span>Presion: <b id="mPres">--</b> hPa</span>
+      <span>Proximidad: <b id="mProx">--</b></span>
+      <span>Luz: <b id="mLight">--</b></span>
+      <span>Eventos (gestos): <b id="mEvt">--</b></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Nivel (bubble)</h2>
+    <div class="bubble-wrap"><canvas id="bubble" width="180" height="180" style="width:180px;height:180px;"></canvas></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Enlace LoRa</h2>
+    <div class="stat-inline" style="flex-direction:column; gap:8px;">
+      <span>Paquete #: <b id="dSeq">--</b></span>
+      <span>RSSI: <b id="dRssi">--</b> dBm</span>
+      <span>SNR: <b id="dSnr">--</b> dB</span>
+      <span>Intervalo entre paquetes: <b id="dInterval">--</b> ms</span>
+      <span>Ultimo paquete recibido: <b id="dLast">--</b></span>
+      <span>Total de paquetes en esta sesion: <b id="dTotal">0</b></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Magnitud de senal</h2>
+    <canvas id="chartRssi" height="130"></canvas>
+  </div>
+</div>
+
+<script>
+const els = {};
+['statusDot','statusText','mRoll','mPitch','mYaw','mTemp','mPres','mProx','mLight','mEvt','mRssi',
+ 'dSeq','dRssi','dSnr','dInterval','dLast','dTotal'].forEach(id => els[id] = document.getElementById(id));
+
+const ROLLING_WINDOW = 120;
+let history = { roll: [], pitch: [], rssi: [] };
+let lastRecvAt = null;
+let totalPackets = 0;
+let staleTimer = null;
+
+/* --- Suavizado: los paquetes reales llegan cada ~250-600ms, pero la
+ * pantalla se redibuja a ~60fps interpolando "display" hacia "target"
+ * (lerp exponencial). Así se ve como movimiento continuo en vez de
+ * saltos entre lecturas, sin inventar datos - target siempre es el
+ * ultimo valor real recibido. */
+let target = { roll: 0, pitch: 0, yaw: 0, temp: 0, pres: 0, rssi: null };
+let display = { roll: 0, pitch: 0, yaw: 0, temp: 0, pres: 0, rssi: null };
+const LERP_RATE = 0.18; // 0-1: mas alto = alcanza el valor real mas rapido, menos suave
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function setStatus(live) {
+  els.statusDot.className = 'dot ' + (live ? 'live' : 'off');
+  els.statusText.textContent = live ? 'Conectado - recibiendo paquetes LoRa' : 'Sin paquetes recientes';
+}
+
+function pushWindow(arr, v) {
+  arr.push(v);
+  if (arr.length > ROLLING_WINDOW) arr.shift();
+}
+
+function signalClass(rssi) {
+  if (rssi === undefined || rssi === null) return '';
+  if (rssi > -80) return 'sig-good';
+  if (rssi > -100) return 'sig-warn';
+  return 'sig-bad';
+}
+
+function handleData(d) {
+  setStatus(true);
+  clearTimeout(staleTimer);
+  staleTimer = setTimeout(() => setStatus(false), 3000);
+
+  const now = Date.now();
+  const interval = lastRecvAt ? (now - lastRecvAt) : null;
+  lastRecvAt = now;
+  totalPackets++;
+
+  // Solo actualiza el OBJETIVO - el bucle de animacion hace la
+  // interpolacion visual y el dibujo en cada frame.
+  target.roll = d.r ?? 0;
+  target.pitch = d.p ?? 0;
+  target.yaw = d.y ?? 0;
+  target.temp = d.t ?? 0;
+  target.pres = d.pr ?? 0;
+  target.rssi = d._rssi ?? null;
+
+  els.mProx.textContent = d.px ?? '--';
+  els.mLight.textContent = d.lt ?? '--';
+  els.mEvt.textContent = d.ev ?? '--';
+
+  els.dSeq.textContent = d.seq ?? '--';
+  els.dRssi.textContent = target.rssi !== null ? target.rssi.toFixed(1) : '--';
+  els.dSnr.textContent = d._snr !== undefined && d._snr !== null ? d._snr.toFixed(1) : '--';
+  els.dInterval.textContent = interval !== null ? interval : '--';
+  els.dLast.textContent = new Date().toLocaleTimeString();
+  els.dTotal.textContent = totalPackets;
+
+  pushWindow(history.roll, target.roll);
+  pushWindow(history.pitch, target.pitch);
+  pushWindow(history.rssi, target.rssi ?? 0);
+}
+
+function animationLoop() {
+  display.roll = lerp(display.roll, target.roll, LERP_RATE);
+  display.pitch = lerp(display.pitch, target.pitch, LERP_RATE);
+  display.yaw = lerp(display.yaw, target.yaw, LERP_RATE);
+  display.temp = lerp(display.temp, target.temp, LERP_RATE);
+  display.pres = lerp(display.pres, target.pres, LERP_RATE);
+  if (target.rssi !== null) {
+    display.rssi = display.rssi === null ? target.rssi : lerp(display.rssi, target.rssi, LERP_RATE);
+  }
+
+  els.mRoll.textContent = display.roll.toFixed(1);
+  els.mPitch.textContent = display.pitch.toFixed(1);
+  els.mYaw.textContent = display.yaw.toFixed(1);
+  els.mTemp.textContent = display.temp.toFixed(1);
+  els.mPres.textContent = display.pres.toFixed(0);
+  els.mRssi.textContent = display.rssi !== null ? display.rssi.toFixed(0) : '--';
+  els.mRssi.className = 'val ' + signalClass(display.rssi);
+
+  drawBubble(display.roll, display.pitch);
+  drawSeriesChart('chartOrient', [
+    { data: history.roll, color: '#5b8cff' },
+    { data: history.pitch, color: '#ffb84d' },
+  ]);
+  drawSeriesChart('chartRssi', [
+    { data: history.rssi, color: '#3ecf8e' },
+  ]);
+
+  requestAnimationFrame(animationLoop);
+}
+requestAnimationFrame(animationLoop);
+
+function drawBubble(roll, pitch) {
+  const c = document.getElementById('bubble');
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 10;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#2a3350'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
+
+  const scale = r / 45;
+  let bx = cx + Math.max(-r, Math.min(r, roll * scale));
+  let by = cy + Math.max(-r, Math.min(r, pitch * scale));
+  const dist = Math.hypot(bx - cx, by - cy);
+  const inRange = dist <= r + 8;
+
+  ctx.fillStyle = inRange ? '#5b8cff' : '#ff6b6b';
+  ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#0b0f18'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function drawSeriesChart(canvasId, series) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.clientWidth || 400, h = canvas.clientHeight || 150;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0, 0, w, h);
+
+  let allVals = [];
+  series.forEach(s => allVals = allVals.concat(s.data));
+  if (allVals.length < 2) {
+    ctx.fillStyle = '#8a92a8'; ctx.font = '12px sans-serif';
+    ctx.fillText('Esperando datos...', 10, h / 2);
+    return;
+  }
+  const min = Math.min(...allVals), max = Math.max(...allVals);
+  const range = (max - min) || 1;
+  const pad = 8;
+
+  series.forEach(s => {
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    s.data.forEach((v, i) => {
+      const x = pad + (i / (ROLLING_WINDOW - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = '#8a92a8'; ctx.font = '10px sans-serif';
+  ctx.fillText(max.toFixed(1), 4, 12);
+  ctx.fillText(min.toFixed(1), 4, h - 4);
+}
+
+// --- Server-Sent Events: sin websockets, solo EventSource nativo ---
+const evtSource = new EventSource('/events');
+evtSource.onmessage = (e) => {
+  try {
+    const d = JSON.parse(e.data);
+    handleData(d);
+  } catch (err) { /* ignorar linea invalida */ }
+};
+evtSource.onerror = () => setStatus(false);
+
+setStatus(false);
+</script>
+
+</body>
+</html>

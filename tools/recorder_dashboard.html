@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MyosaCentinela — Control Room</title>
+<style>
+  :root {
+    /* Chart chrome (dark, dataviz skill palette.md) */
+    --surface:      #1a1a19;
+    --page:         #0d0d0d;
+    --panel:        #17181c;
+    --panel2:       #202126;
+    --ink:          #ffffff;
+    --ink-2:        #c3c2b7;
+    --muted:        #898781;
+    --grid:         #2c2c2a;
+    --baseline:     #383835;
+    --border:       rgba(255,255,255,0.10);
+
+    /* Categorical slot 1 (dark) = system accent */
+    --accent:       #3987e5;
+    --accent-soft:  rgba(57,135,229,0.14);
+
+    /* Status palette (fixed, mode-invariant) */
+    --good:         #0ca30c;
+    --warning:      #fab219;
+    --serious:      #ec835a;
+    --critical:     #d03b3b;
+    --good-soft:    rgba(12,163,12,0.14);
+    --warning-soft: rgba(250,178,25,0.14);
+    --serious-soft: rgba(236,131,90,0.14);
+    --critical-soft:rgba(208,59,59,0.16);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--page); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 22px; line-height: 1.4;
+    background-image:
+      radial-gradient(circle at 15% -10%, rgba(57,135,229,0.10), transparent 42%),
+      radial-gradient(circle at 100% 0%, rgba(236,131,90,0.06), transparent 38%);
+    background-attachment: fixed;
+  }
+  h1 { font-size: 20px; margin: 0; letter-spacing: 0.01em; }
+  h1 .sub { color: var(--muted); font-weight: 400; font-size: 12px; display: block; margin-top: 3px; }
+  h2 { font-size: 12px; margin: 0 0 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display:flex; align-items:center; gap:7px; }
+  h2 svg { width: 14px; height: 14px; opacity: 0.8; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px;
+    border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--panel2);
+    border: 1px solid var(--border); color: var(--ink-2);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); animation: dotBreathe 2.2s ease-in-out infinite; }
+  .dot.off { background: var(--critical); }
+  @keyframes dotBreathe { 0%,100% { box-shadow: 0 0 0 3px var(--good-soft); } 50% { box-shadow: 0 0 0 6px var(--good-soft); } }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--surface) 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.6);
+  }
+
+  /* ---------- Hero: worker / device card ---------- */
+  .hero {
+    display: flex; align-items: center; gap: 22px; margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .hero-ring-wrap { position: relative; width: 86px; height: 86px; flex: none; }
+  .hero-ring { width: 86px; height: 86px; }
+  .hero-ring .track { fill: none; stroke: var(--grid); stroke-width: 4; }
+  .hero-ring .pulse { fill: none; stroke: var(--good); stroke-width: 4; stroke-linecap: round;
+    transform-origin: center; opacity: 0; }
+  .hero-ring.live .pulse { animation: heroPulse 2.4s ease-out infinite; }
+  .hero-ring.off .track { stroke: var(--critical-soft); }
+  @keyframes heroPulse {
+    0%   { opacity: 0.9; stroke-dasharray: 4 260; stroke-dashoffset: 0; }
+    100% { opacity: 0; stroke-dasharray: 260 260; stroke-dashoffset: -30; }
+  }
+  .hero-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .hero-icon svg { width: 38px; height: 38px; color: var(--ink-2); }
+  .hero-ring.live ~ .hero-icon svg { color: var(--ink); }
+  .hero-text { flex: 1; min-width: 220px; }
+  .hero-title { font-size: 21px; font-weight: 700; }
+  .hero-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+    border-radius: 8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em;
+    border: 1px solid var(--border); background: var(--panel2); color: var(--ink-2);
+  }
+
+  /* ---------- KPI gauges ---------- */
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+  @media (max-width: 900px) { .kpi-grid { grid-template-columns: 1fr; } }
+  .kpi { display: flex; align-items: center; gap: 14px; }
+  .gauge-wrap { position: relative; width: 84px; height: 84px; flex: none; }
+  .gauge-wrap svg { width: 84px; height: 84px; transform: rotate(-90deg); }
+  .gauge-wrap .g-track { fill: none; stroke: var(--grid); stroke-width: 8; }
+  .gauge-wrap .g-value { fill: none; stroke-linecap: round; stroke-width: 8;
+    transition: stroke-dashoffset 0.5s cubic-bezier(.4,0,.2,1), stroke 0.4s ease;
+    filter: drop-shadow(0 0 5px currentColor); }
+  .gauge-label { position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; }
+  .gauge-label .v { font-size: 17px; font-weight: 700; font-variant-numeric: proportional-nums; }
+  .gauge-label .u { font-size: 9.5px; color: var(--muted); margin-top: -2px; }
+  .kpi-info { min-width: 0; }
+  .kpi-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+    display: flex; align-items: center; gap: 6px; }
+  .kpi-lbl svg { width: 13px; height: 13px; flex: none; }
+  .kpi-status { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 12px; font-weight: 600; }
+  .kpi-status .dotstat { width: 7px; height: 7px; border-radius: 50%; }
+
+  .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 1100px) { .grid2 { grid-template-columns: 1fr; } }
+  canvas.chart { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; display: block; }
+  .bubble-wrap { display: flex; justify-content: center; margin-top: 4px; }
+  .stat-inline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .stat-inline b { color: var(--ink); font-weight: 600; }
+
+  .scroll { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .tag-fall { background: var(--critical-soft); color: var(--critical); }
+  .tag-normal { background: var(--accent-soft); color: var(--accent); }
+  .tag-auto { background: var(--warning-soft); color: var(--warning); }
+  .tag-gesto { background: var(--good-soft); color: var(--good); }
+  .tag-descarta { background: var(--good-soft); color: var(--good); }
+  .empty { color: var(--muted); font-size: 13px; padding: 16px; text-align: center; }
+
+  /* ---------- Two-stage alert ---------- */
+  #alertPending {
+    display: none; margin-bottom: 14px; padding: 16px 20px; border-radius: 14px;
+    background: var(--serious-soft); border: 1.5px solid var(--serious);
+    align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  #alertPending .ring-wrap { position: relative; width: 56px; height: 56px; flex: none; }
+  #alertPending svg { width: 56px; height: 56px; transform: rotate(-90deg); }
+  #alertPending .p-track { fill: none; stroke: rgba(236,131,90,0.25); stroke-width: 5; }
+  #alertPending .p-value { fill: none; stroke: var(--serious); stroke-width: 5; stroke-linecap: round; }
+  #alertPending .ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; color: var(--serious); }
+  #alertPending .p-text { flex: 1; min-width: 220px; }
+  #alertPending .p-title { font-size: 15px; font-weight: 800; color: var(--serious); }
+  #alertPending .p-sub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+
+  #alertConfirmed {
+    display: none; margin-bottom: 14px; padding: 22px; border-radius: 14px;
+    background: var(--critical); color: #fff; text-align: center;
+    animation: alertPulse 1s infinite;
+  }
+  @keyframes alertPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(208,59,59,0.65); } 50% { box-shadow: 0 0 0 16px rgba(208,59,59,0); } }
+
+  #alertToast {
+    display: none; margin-bottom: 14px; padding: 13px 20px; border-radius: 12px;
+    background: var(--good-soft); border: 1.5px solid var(--good); color: var(--good);
+    font-weight: 700; font-size: 13.5px; align-items: center; gap: 10px;
+  }
+  #alertToast svg { width: 18px; height: 18px; flex: none; }
+
+  button {
+    border: none; border-radius: 9px; padding: 12px 18px; font-size: 13.5px;
+    cursor: pointer; font-weight: 700; transition: transform 0.12s ease, filter 0.15s ease;
+    font-family: inherit; background: rgba(255,255,255,0.15); color: #fff; border: 1px solid #fff;
+  }
+  button:active { transform: scale(0.97); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MyosaCentinela <span style="color:var(--muted); font-weight:400;">— Control Room</span>
+    <span class="sub" id="sessionLabel">waiting for device...</span>
+  </h1>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <span class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">Waiting for ESP32...</span></span>
+    <span class="status-pill" id="netPill" style="display:none;">📶 <span id="netText">--</span></span>
+    <span class="status-pill" id="rssiPill" style="display:none;">📡 <span id="rssiText">--</span></span>
+  </div>
+</header>
+
+<!-- Stage 1: evaluating, cancellable with a gesture (10s) -->
+<div id="alertPending">
+  <div class="ring-wrap">
+    <svg viewBox="0 0 56 56"><circle class="p-track" cx="28" cy="28" r="24"></circle>
+      <circle class="p-value" id="pendingRing" cx="28" cy="28" r="24"
+        stroke-dasharray="150.8" stroke-dashoffset="0"></circle></svg>
+    <div class="ring-label" id="pendingSecs">10</div>
+  </div>
+  <div class="p-text">
+    <div class="p-title">⚠ Possible fall detected — evaluating</div>
+    <div class="p-sub">The worker can cancel it with a gesture (left-right, right-left, up-down, or down-up). If they don't respond within <b id="pendingWindow">10s</b>, the alert is confirmed.</div>
+  </div>
+</div>
+
+<!-- Cancelled in time: brief, non-critical notice -->
+<div id="alertToast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+  <span>Cancelled by the worker — false alarm dismissed, not escalated.</span>
+</div>
+
+<!-- Stage 2: confirmed (no cancellation within 10s) -->
+<div id="alertConfirmed">
+  <div style="font-size:24px; font-weight:800;">⚠ FALL CONFIRMED ⚠</div>
+  <div style="font-size:13px; margin-top:4px;"><span id="confirmedReason">worker did not cancel with gestures within 10s</span> &middot; <span id="alertTime"></span></div>
+  <button onclick="dismissConfirmed()" style="margin-top:10px;">Dismiss</button>
+</div>
+
+<div class="panel hero">
+  <div class="hero-ring-wrap">
+    <svg class="hero-ring" id="heroRing" viewBox="0 0 86 86">
+      <circle class="track" cx="43" cy="43" r="39"></circle>
+      <circle class="pulse" cx="43" cy="43" r="39"></circle>
+    </svg>
+    <div class="hero-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="7" r="3.4"></circle>
+        <path d="M4.5 21c0-4.4 3.4-7.5 7.5-7.5s7.5 3.1 7.5 7.5"></path>
+      </svg>
+    </div>
+  </div>
+  <div class="hero-text">
+    <div class="hero-title" id="heroTitle">Worker — no device connected</div>
+    <div class="hero-meta">
+      <span class="badge">⏳ Uptime: <span id="sDur">0s</span></span>
+      <span class="badge">📡 Readings: <span id="sCount">0</span></span>
+      <span class="badge">🔎 Candidates: <span id="sAuto">0</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="panel kpi">
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 84 84"><circle class="g-track" cx="42" cy="42" r="36"></circle>
+        <circle class="g-value" id="gaugeMag" cx="42" cy="42" r="36" stroke-dasharray="226.2"></circle></svg>
+      <div class="gauge-label"><div class="v" id="mMag">--</div><div class="u">g</div></div>
+    </div>
+    <div class="kpi-info">
+      <div class="kpi-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"></path></svg>Acceleration</div>
+      <div class="kpi-status"><span class="dotstat" id="magDot"></span><span id="magStatus">--</span></div>
+    </div>
+  </div>
+  <div class="panel kpi">
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 84 84"><circle class="g-track" cx="42" cy="42" r="36"></circle>
+        <circle class="g-value" id="gaugeTemp" cx="42" cy="42" r="36" stroke-dasharray="226.2"></circle></svg>
+      <div class="gauge-label"><div class="v" id="mTemp">--</div><div class="u">°C</div></div>
+    </div>
+    <div class="kpi-info">
+      <div class="kpi-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg>Temperature</div>
+      <div class="kpi-status"><span class="dotstat" id="tempDot"></span><span id="tempStatus">--</span></div>
+    </div>
+  </div>
+  <div class="panel kpi">
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 84 84"><circle class="g-track" cx="42" cy="42" r="36"></circle>
+        <circle class="g-value" id="gaugePres" cx="42" cy="42" r="36" stroke-dasharray="226.2"></circle></svg>
+      <div class="gauge-label"><div class="v" id="mPres" style="font-size:14px;">--</div><div class="u">hPa</div></div>
+    </div>
+    <div class="kpi-info">
+      <div class="kpi-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 12 8.5 9"></path></svg>Pressure</div>
+      <div class="kpi-status"><span class="dotstat" id="presDot"></span><span id="presStatus">--</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg>Live acceleration magnitude (the key signal for a fall)</h2>
+    <canvas class="chart" id="chartMag" height="150"></canvas>
+    <div class="stat-inline">
+      <span>Impact threshold: <b>1.8g</b></span>
+      <span>Free-fall threshold: <b>0.3g</b></span>
+      <span>Yaw: <b id="mYaw">--</b> deg</span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="1.5" fill="currentColor"></circle></svg>Level (bubble)</h2>
+    <div class="bubble-wrap"><canvas id="bubble" width="180" height="180" style="width:180px;height:180px;"></canvas></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg>Monitoring summary</h2>
+    <div class="stat-inline" style="margin-top:6px;">
+      <span>Readings received: <b id="sCount2">0</b></span>
+      <span>Auto-detected candidates: <b id="sAuto2">0</b></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19h16M4 15h10M4 11h16M4 7h10"></path></svg>Recent events</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Type</th><th>Detail</th></tr></thead>
+        <tbody id="tblEvt"><tr><td colspan="3" class="empty">No events yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const els = {};
+['statusDot','statusText','sessionLabel','heroTitle','mMag','mTemp','mPres','mYaw',
+ 'sCount','sCount2','sAuto','sAuto2','sDur','tblEvt','netPill','netText','rssiPill','rssiText',
+ 'magDot','magStatus','tempDot','tempStatus','presDot','presStatus',
+ 'heroRing','gaugeMag','gaugeTemp','gaugePres'].forEach(id => els[id] = document.getElementById(id));
+
+const ROLLING_WINDOW = 150;
+const ALARM_DURATION_S = 10; // must match ALARM_DURATION_MS in main/myosa_field_main.c
+let history = { mag: [] };
+let display = { roll: 0, pitch: 0, mag: 1.0, temp: 0, pres: 0 };
+let target = { roll: 0, pitch: 0, yaw: 0, temp: 0, mag: 1.0, pres: 0 };
+const LERP_RATE = 0.2;
+let startedAt = null;
+let staleTimer = null;
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ---------- Status colors (status palette: good/warning/serious/critical) ----------
+const STATUS = {
+  good:     { color: 'var(--good)',     label: 'Normal' },
+  warning:  { color: 'var(--warning)',  label: 'Watch' },
+  serious:  { color: 'var(--serious)',  label: 'Alert' },
+  critical: { color: 'var(--critical)', label: 'Critical' },
+  info:     { color: 'var(--accent)',   label: 'Informational' },
+};
+
+// English display labels for the event "type" strings sent over the wire
+// (firmware/backend protocol keeps its own identifiers - only the shown
+// text is translated, tag-class matching below still keys off the
+// original values).
+const EVT_LABELS = {
+  GESTO: 'GESTURE',
+  ALERTA_CAIDA: 'FALL ALERT',
+  MODELO_DESCARTA: 'MODEL DISMISSED',
+  HUMANO_DESCARTA: 'CANCELLED BY WORKER',
+  ALARMA_TIMEOUT: 'ALARM TIMEOUT',
+  CANDIDATO_AUTO: 'AUTO CANDIDATE',
+  BATERIA_BAJA: 'LOW BATTERY',
+  BATERIA_OK: 'BATTERY OK',
+  SEGMENTO: 'SEGMENT',
+};
+
+function magSeverity(mag) {
+  if (mag > 1.8 || mag < 0.3) return 'critical';
+  if (mag > 1.4 || mag < 0.6) return 'warning';
+  return 'good';
+}
+function tempSeverity(t) {
+  if (t > 45 || t < 5) return 'critical';
+  if (t > 38 || t < 12) return 'warning';
+  return 'good';
+}
+
+function setStatus(live) {
+  els.statusDot.className = 'dot ' + (live ? 'live' : 'off');
+  els.statusText.textContent = live ? 'Live — receiving data' : 'Waiting for ESP32...';
+  els.heroRing.className = 'hero-ring ' + (live ? 'live' : 'off');
+}
+
+function fmtDur(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return m > 0 ? `${m}m ${ss}s` : `${ss}s`;
+}
+
+// ---------- Gauges (SVG arc: circumference r=36 -> 226.2) ----------
+const GAUGE_CIRC = 2 * Math.PI * 36;
+function setGauge(el, frac, severity) {
+  frac = Math.max(0, Math.min(1, frac));
+  const offset = GAUGE_CIRC * (1 - frac);
+  el.style.strokeDashoffset = offset;
+  el.style.stroke = STATUS[severity].color;
+  el.style.color = STATUS[severity].color; // drives the drop-shadow (currentColor)
+}
+function setKpiStatus(dotEl, statusEl, severity) {
+  dotEl.style.background = STATUS[severity].color;
+  statusEl.textContent = STATUS[severity].label;
+  statusEl.style.color = STATUS[severity].color;
+}
+
+function handleTelemetry(d) {
+  setStatus(true);
+  clearTimeout(staleTimer);
+  staleTimer = setTimeout(() => setStatus(false), 3000);
+
+  if (!startedAt) startedAt = Date.now();
+  const label = d.session_label || 'device';
+  els.sessionLabel.textContent = label;
+  els.heroTitle.textContent = 'Worker — ' + label;
+  els.sCount.textContent = d.n_tlm ?? 0;
+  els.sCount2.textContent = d.n_tlm ?? 0;
+  els.sAuto.textContent = d.n_auto_candidates ?? 0;
+  els.sAuto2.textContent = d.n_auto_candidates ?? 0;
+  els.sDur.textContent = fmtDur(Date.now() - startedAt);
+
+  target.roll = d.roll ?? 0;
+  target.pitch = d.pitch ?? 0;
+  target.yaw = d.yaw ?? 0;
+  target.temp = d.temp ?? 0;
+  target.pres = d.pres ?? 0;
+  target.mag = d.accel_mag_g ?? 1.0;
+
+  history.mag.push(target.mag);
+  if (history.mag.length > ROLLING_WINDOW) history.mag.shift();
+
+  // "net" and RSSI/SNR only arrive when data came in over LoRa
+  // (--lora-listen); over USB/UDP they don't apply and stay hidden.
+  if (d.net !== undefined && d.net !== null) {
+    els.netPill.style.display = '';
+    els.netText.textContent = d.net === 'OFF' ? 'ESP32 has no WiFi' : `ESP32 on "${d.net}"`;
+  }
+  if (d._rssi !== undefined && d._rssi !== null) {
+    els.rssiPill.style.display = '';
+    const snr = (d._snr !== undefined && d._snr !== null) ? `, SNR ${d._snr.toFixed(1)}dB` : '';
+    els.rssiText.textContent = `LoRa ${d._rssi.toFixed(0)}dBm${snr}`;
+  }
+}
+
+function addEventRow(kind, detail, time) {
+  if (els.tblEvt.rows.length === 1 && els.tblEvt.rows[0].cells.length === 1) {
+    els.tblEvt.innerHTML = '';
+  }
+  const tagClass =
+    (kind === 'ALERTA_CAIDA' || kind === 'BATERIA_BAJA') ? 'tag-fall' :
+    kind === 'SEGMENTO' && (detail || '').includes('CAIDA') ? 'tag-fall' :
+    kind === 'SEGMENTO' ? 'tag-normal' :
+    (kind === 'CANDIDATO_AUTO' || kind === 'MODELO_DESCARTA') ? 'tag-auto' :
+    (kind === 'HUMANO_DESCARTA' || kind === 'ALARMA_TIMEOUT' || kind === 'BATERIA_OK') ? 'tag-descarta' : 'tag-gesto';
+  const row = document.createElement('tr');
+  row.innerHTML = `<td>${time}</td><td><span class="tag ${tagClass}">${EVT_LABELS[kind] || kind}</span></td><td>${detail || ''}</td>`;
+  els.tblEvt.insertBefore(row, els.tblEvt.firstChild);
+  while (els.tblEvt.rows.length > 100) els.tblEvt.deleteRow(els.tblEvt.rows.length - 1);
+}
+
+function animationLoop() {
+  display.roll = lerp(display.roll, target.roll, LERP_RATE);
+  display.pitch = lerp(display.pitch, target.pitch, LERP_RATE);
+  display.mag = lerp(display.mag, target.mag, LERP_RATE);
+  display.temp = lerp(display.temp, target.temp, LERP_RATE);
+  display.pres = lerp(display.pres, target.pres, LERP_RATE);
+
+  els.mMag.textContent = display.mag.toFixed(2);
+  els.mYaw.textContent = target.yaw.toFixed(1);
+  els.mTemp.textContent = display.temp.toFixed(1);
+  els.mPres.textContent = display.pres.toFixed(0);
+
+  const magSev = magSeverity(display.mag);
+  setGauge(els.gaugeMag, Math.min(1, display.mag / 2.2), magSev);
+  setKpiStatus(els.magDot, els.magStatus, magSev);
+
+  const tempSev = tempSeverity(display.temp);
+  setGauge(els.gaugeTemp, Math.max(0, Math.min(1, (display.temp - 0) / 55)), tempSev);
+  setKpiStatus(els.tempDot, els.tempStatus, tempSev);
+
+  // Pressure: informational (no clear physiological severity for this
+  // device) - arc scaled over a typical 950-1050hPa range, fixed "info" color.
+  setGauge(els.gaugePres, Math.max(0, Math.min(1, (display.pres - 950) / 100)), 'info');
+  setKpiStatus(els.presDot, els.presStatus, 'info');
+
+  drawBubble(display.roll, display.pitch);
+  drawSeriesChart('chartMag', [{ data: history.mag, color: '#3987e5' }], [1.8, 0.3]);
+
+  updatePendingRing();
+
+  requestAnimationFrame(animationLoop);
+}
+requestAnimationFrame(animationLoop);
+
+function drawBubble(roll, pitch) {
+  const c = document.getElementById('bubble');
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 10;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#2c2c2a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
+
+  const scale = r / 45;
+  let bx = cx + Math.max(-r, Math.min(r, roll * scale));
+  let by = cy + Math.max(-r, Math.min(r, pitch * scale));
+  const dist = Math.hypot(bx - cx, by - cy);
+  const inRange = dist <= r + 8;
+
+  ctx.fillStyle = inRange ? '#3987e5' : '#d03b3b';
+  ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#1a1a19'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function drawSeriesChart(canvasId, series, thresholds) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.clientWidth || 400, h = canvas.clientHeight || 150;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0, 0, w, h);
+
+  let allVals = [];
+  series.forEach(s => allVals = allVals.concat(s.data));
+  if (thresholds) allVals = allVals.concat(thresholds);
+  if (allVals.length < 2) {
+    ctx.fillStyle = '#898781'; ctx.font = '12px sans-serif';
+    ctx.fillText('Waiting for data...', 10, h / 2);
+    return;
+  }
+  const min = Math.min(...allVals, 0), max = Math.max(...allVals, 2);
+  const range = (max - min) || 1;
+  const pad = 8;
+
+  if (thresholds) {
+    ctx.strokeStyle = 'rgba(208,59,59,0.4)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+    thresholds.forEach(t => {
+      const y = h - pad - ((t - min) / range) * (h - pad * 2);
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+  }
+
+  series.forEach(s => {
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    s.data.forEach((v, i) => {
+      const x = pad + (i / (ROLLING_WINDOW - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = '#898781'; ctx.font = '10px sans-serif';
+  ctx.fillText(max.toFixed(1) + 'g', 4, 12);
+  ctx.fillText(min.toFixed(1) + 'g', 4, h - 4);
+}
+
+// ======================================================================
+//  TWO-STAGE ALERT:
+//   1) An ALERTA_CAIDA from the ESP32 (source:"esp32") arms a
+//      ALARM_DURATION_S window - this shows "evaluating", NOT the loud
+//      alert, because during that time the worker can cancel it with a
+//      gesture (this is what keeps false positives from always reaching
+//      this system).
+//   2) If HUMANO_DESCARTA arrives before the window elapses -> resolved
+//      as a false alarm (brief, non-critical notice).
+//      If ALARMA_TIMEOUT arrives, or the window elapses with no
+//      cancellation (local fallback in case that message is lost) ->
+//      the critical alert is confirmed.
+//   The PC-side model's alert (no gesture step, no "source") stays
+//   immediate - that path has no gesture-cancellation step at all.
+// ======================================================================
+let pendingAlert = null; // { startedAt, timeoutHandle }
+
+function startPendingAlert() {
+  if (pendingAlert) return; // already evaluating one
+  document.getElementById('alertConfirmed').style.display = 'none';
+  document.getElementById('alertToast').style.display = 'none';
+  document.getElementById('alertPending').style.display = 'flex';
+  document.getElementById('pendingWindow').textContent = ALARM_DURATION_S + 's';
+  pendingAlert = {
+    startedAt: Date.now(),
+    timeoutHandle: setTimeout(() => resolvePendingAlert('confirmed'), (ALARM_DURATION_S + 2) * 1000),
+  };
+}
+
+function updatePendingRing() {
+  if (!pendingAlert) return;
+  const elapsed = (Date.now() - pendingAlert.startedAt) / 1000;
+  const remaining = Math.max(0, ALARM_DURATION_S - elapsed);
+  document.getElementById('pendingSecs').textContent = Math.ceil(remaining);
+  const frac = Math.max(0, remaining / ALARM_DURATION_S);
+  const circ = 2 * Math.PI * 24;
+  document.getElementById('pendingRing').style.strokeDashoffset = circ * (1 - frac);
+}
+
+function resolvePendingAlert(outcome) {
+  if (!pendingAlert) return;
+  clearTimeout(pendingAlert.timeoutHandle);
+  pendingAlert = null;
+  document.getElementById('alertPending').style.display = 'none';
+
+  if (outcome === 'cancelled') {
+    const toast = document.getElementById('alertToast');
+    toast.style.display = 'flex';
+    setTimeout(() => { toast.style.display = 'none'; }, 4500);
+  } else {
+    document.getElementById('confirmedReason').textContent =
+      `worker did not cancel with gestures within ${ALARM_DURATION_S}s`;
+    document.getElementById('alertTime').textContent = new Date().toLocaleTimeString();
+    document.getElementById('alertConfirmed').style.display = 'block';
+    try { new AudioContext(); } catch (e) {} // hook, no sound wired up yet
+  }
+}
+
+function dismissConfirmed() {
+  document.getElementById('alertConfirmed').style.display = 'none';
+}
+
+// Immediate alert (PC-side model path, no gesture window)
+function showImmediateAlert(confidence) {
+  document.getElementById('alertPending').style.display = 'none';
+  document.getElementById('confirmedReason').textContent = confidence == null
+    ? 'fall detected by the on-device model'
+    : `fall detected by the model (${(confidence * 100).toFixed(0)}% confidence)`;
+  document.getElementById('alertTime').textContent = new Date().toLocaleTimeString();
+  document.getElementById('alertConfirmed').style.display = 'block';
+}
+
+const evtSource = new EventSource('/events');
+evtSource.onmessage = (e) => {
+  try {
+    const d = JSON.parse(e.data);
+    if (d._kind === 'evt') {
+      addEventRow(d.type, d.detail, new Date().toLocaleTimeString());
+      if (d.type === 'HUMANO_DESCARTA') resolvePendingAlert('cancelled');
+      else if (d.type === 'ALARMA_TIMEOUT') resolvePendingAlert('confirmed');
+    } else if (d._kind === 'alert') {
+      if (d.source === 'esp32') startPendingAlert();
+      else showImmediateAlert(d.confidence);
+    } else {
+      handleTelemetry(d);
+    }
+  } catch (err) { /* ignore */ }
+};
+evtSource.onerror = () => setStatus(false);
+
+setStatus(false);
+</script>
+
+</body>
+</html>

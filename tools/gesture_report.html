@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MyosaCentinela - Analisis de gestos</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171d2e; --panel2: #1e2740; --text: #e8ecf5;
+    --muted: #8a92a8; --accent: #5b8cff; --good: #3ecf8e; --bad: #ff6b6b;
+    --warn: #ffb84d; --border: #2a3350;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    margin: 0; padding: 24px; line-height: 1.4;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+  p.sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  textarea {
+    width: 100%; height: 220px; background: #0b0f18; color: #cfe0ff;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: Consolas, monospace; font-size: 12px; resize: vertical;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat {
+    background: var(--panel2); border-radius: 8px; padding: 12px; text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stat .num { font-size: 22px; font-weight: 700; }
+  .stat .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+  .scroll { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .tag-ok { background: rgba(62,207,142,0.18); color: var(--good); }
+  .tag-bad { background: rgba(255,107,107,0.18); color: var(--bad); }
+  .tag-cooldown { background: rgba(255,184,77,0.18); color: var(--warn); }
+  .tag-timeout { background: rgba(138,146,168,0.25); color: var(--muted); }
+  canvas { width: 100%; background: #0b0f18; border: 1px solid var(--border); border-radius: 8px; }
+  .recommend {
+    background: rgba(91,140,255,0.12); border: 1px solid rgba(91,140,255,0.4);
+    border-radius: 8px; padding: 14px; font-size: 13px;
+  }
+  .recommend b { color: var(--accent); font-size: 18px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  code { background: #0b0f18; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>MyosaCentinela &mdash; Analisis de gestos (APDS9960)</h1>
+<p class="sub">Pega el log del puerto serie (idf.py monitor) o conecta directo por USB, y esto calcula aciertos, falsos positivos, tiempos entre gestos verdaderos, y sugiere el mejor valor de <code>gesture_cooldown_ms</code> para el firmware.</p>
+
+<div class="panel">
+  <h2>1. Cargar datos</h2>
+  <textarea id="log" placeholder="Pega aqui el log completo de idf.py monitor (o usa Conectar por USB abajo si tu navegador lo soporta)..."></textarea>
+  <div class="row">
+    <button id="btnAnalyze">Analizar</button>
+    <button id="btnSerial" class="secondary">Conectar por USB (Web Serial)</button>
+    <button id="btnClear" class="secondary">Limpiar</button>
+    <span id="serialStatus" style="color: var(--muted); font-size: 12px;"></span>
+  </div>
+</div>
+
+<div id="results" style="display:none;">
+
+  <div class="panel">
+    <h2>Resumen general</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="stSeqs">0</div><div class="lbl">Secuencias</div></div>
+      <div class="stat"><div class="num good" id="stOk">0</div><div class="lbl">Aciertos (OK)</div></div>
+      <div class="stat"><div class="num bad" id="stBad">0</div><div class="lbl">Falsos (BAD)</div></div>
+      <div class="stat"><div class="num warn" id="stCooldown">0</div><div class="lbl">Filtrados (cooldown)</div></div>
+      <div class="stat"><div class="num" id="stTimeout">0</div><div class="lbl">Timeouts</div></div>
+      <div class="stat"><div class="num" id="stAccuracy">0%</div><div class="lbl">Precision</div></div>
+    </div>
+  </div>
+
+  <div class="panel recommend">
+    <h2 style="color:var(--accent); margin-bottom:6px;">Cooldown sugerido</h2>
+    <div><b id="recValue">--</b> ms</div>
+    <div id="recReason" style="margin-top:8px; color: var(--text);"></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Tiempo entre gestos verdaderos (dt_ultimo_ok)</h2>
+      <canvas id="chartDt" height="160"></canvas>
+      <div class="stat-grid" style="margin-top:10px;">
+        <div class="stat"><div class="num" id="dtMin">-</div><div class="lbl">Min ms</div></div>
+        <div class="stat"><div class="num" id="dtMed">-</div><div class="lbl">Mediana ms</div></div>
+        <div class="stat"><div class="num" id="dtP90">-</div><div class="lbl">P90 ms</div></div>
+        <div class="stat"><div class="num" id="dtMax">-</div><div class="lbl">Max ms</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Brecha de "eco" en falsos positivos (BAD tras un gesto aceptado)</h2>
+      <canvas id="chartEcho" height="160"></canvas>
+      <div class="stat-grid" style="margin-top:10px;">
+        <div class="stat"><div class="num" id="echoCount">-</div><div class="lbl">Ecos detectados</div></div>
+        <div class="stat"><div class="num" id="echoP90">-</div><div class="lbl">P90 ms</div></div>
+        <div class="stat"><div class="num" id="echoMax">-</div><div class="lbl">Max ms</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panelCalib" style="display:none;">
+    <h2>Calibracion inicial (CALIB_EVT)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Direccion pedida</th><th>Intentos hasta acertar</th><th>Fallos previos</th></tr></thead>
+        <tbody id="tblCalib"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Secuencias (GAME_DONE)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>#</th><th>OK</th><th>BAD</th><th>Timeout</th><th>Duracion (s)</th><th>Cooldown usado</th></tr></thead>
+        <tbody id="tblSeqs"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Linea de tiempo de eventos (GAME_EVT)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>t (ms)</th><th>Seq</th><th>Paso</th><th>Esperado</th><th>Detectado</th><th>Resultado</th><th>dt ultimo OK</th></tr></thead>
+        <tbody id="tblEvts"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Ultimo dato MPU6050 (DATA_MPU)</h2>
+      <table>
+        <tr><td>Roll</td><td id="mpuRoll">-</td></tr>
+        <tr><td>Pitch</td><td id="mpuPitch">-</td></tr>
+        <tr><td>Yaw</td><td id="mpuYaw">-</td></tr>
+        <tr><td>Muestras capturadas</td><td id="mpuCount">0</td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Ultimo dato BMP180 (DATA_BMP)</h2>
+      <table>
+        <tr><td>Temperatura</td><td id="bmpTemp">-</td></tr>
+        <tr><td>Presion</td><td id="bmpPres">-</td></tr>
+        <tr><td>Altitud</td><td id="bmpAlt">-</td></tr>
+        <tr><td>Muestras capturadas</td><td id="bmpCount">0</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="emptyMsg" class="panel empty">Pega un log y presiona "Analizar" para ver el reporte.</div>
+
+<script>
+const dirNames = { '^':'ARRIBA', 'v':'ABAJO', '<':'IZQUIERDA', '>':'DERECHA', '?':'?' };
+
+function parseLog(text) {
+  const lines = text.split('\n');
+  const seqStarts = [], evts = [], dones = [], mpu = [], bmp = [], apds = [], calib = [];
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    let m;
+    if ((m = line.match(/CALIB_EVT,(-?\d+),(\S+),(\S+)/))) {
+      calib.push({ t: +m[1], expected: m[2], detected: m[3] });
+    } else if ((m = line.match(/GAME_SEQSTART,(\d+),(\d+),(\S+)/))) {
+      seqStarts.push({ id: +m[1], len: +m[2], seq: m[3] });
+    } else if ((m = line.match(/GAME_EVT,(-?\d+),(\d+),(\d+),(.),(.|-),(OK|BAD|COOLDOWN|TIMEOUT),(-?\d+)/))) {
+      evts.push({
+        t: +m[1], seqId: +m[2], step: +m[3],
+        expected: m[4], detected: m[5], result: m[6], dtLastOk: +m[7]
+      });
+    } else if ((m = line.match(/GAME_DONE,(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/))) {
+      dones.push({ seqId: +m[1], ok: +m[2], bad: +m[3], timeout: +m[4], durationMs: +m[5], cooldownMs: +m[6] });
+    } else if ((m = line.match(/DATA_MPU,(-?\d+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)/))) {
+      mpu.push({ t: +m[1], roll: +m[2], pitch: +m[3], yaw: +m[4] });
+    } else if ((m = line.match(/DATA_BMP,(-?\d+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)/))) {
+      bmp.push({ t: +m[1], temp: +m[2], pres: +m[3], alt: +m[4] });
+    } else if ((m = line.match(/DATA_APDS,(-?\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/))) {
+      apds.push({ t: +m[1], prox: +m[2], clr: +m[3], r: +m[4], g: +m[5], b: +m[6] });
+    }
+  }
+  return { seqStarts, evts, dones, mpu, bmp, apds, calib };
+}
+
+function percentile(sorted, p) {
+  if (sorted.length === 0) return null;
+  const idx = Math.min(sorted.length - 1, Math.floor(p / 100 * sorted.length));
+  return sorted[idx];
+}
+
+function median(sorted) {
+  if (sorted.length === 0) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function drawHistogram(canvasId, values, color) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.clientWidth || 400, h = 160;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0, 0, w, h);
+  if (values.length === 0) {
+    ctx.fillStyle = '#8a92a8'; ctx.font = '12px sans-serif';
+    ctx.fillText('Sin datos suficientes', 10, h / 2);
+    return;
+  }
+  const max = Math.max(...values);
+  const binCount = Math.min(20, Math.max(5, Math.floor(values.length / 2)));
+  const binSize = Math.max(1, Math.ceil(max / binCount));
+  const bins = new Array(binCount).fill(0);
+  for (const v of values) {
+    const bi = Math.min(binCount - 1, Math.floor(v / binSize));
+    bins[bi]++;
+  }
+  const maxBin = Math.max(...bins);
+  const barW = w / binCount;
+  ctx.fillStyle = color;
+  bins.forEach((count, i) => {
+    const barH = (count / maxBin) * (h - 24);
+    ctx.fillRect(i * barW + 2, h - barH - 18, barW - 4, barH);
+  });
+  ctx.fillStyle = '#8a92a8'; ctx.font = '10px sans-serif';
+  ctx.fillText('0', 2, h - 4);
+  ctx.fillText(String(max) + 'ms', w - 40, h - 4);
+}
+
+function render(data) {
+  const { evts, dones, mpu, bmp, calib } = data;
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('emptyMsg').style.display = 'none';
+
+  const okEvts = evts.filter(e => e.result === 'OK');
+  const badEvts = evts.filter(e => e.result === 'BAD');
+  const cdEvts = evts.filter(e => e.result === 'COOLDOWN');
+  const toEvts = evts.filter(e => e.result === 'TIMEOUT');
+  const total = okEvts.length + badEvts.length + toEvts.length;
+
+  document.getElementById('stSeqs').textContent = dones.length || (new Set(evts.map(e => e.seqId))).size;
+  document.getElementById('stOk').textContent = okEvts.length;
+  document.getElementById('stBad').textContent = badEvts.length;
+  document.getElementById('stCooldown').textContent = cdEvts.length;
+  document.getElementById('stTimeout').textContent = toEvts.length;
+  document.getElementById('stAccuracy').textContent = total ? Math.round(100 * okEvts.length / total) + '%' : '-';
+
+  // dt entre gestos verdaderos
+  const dts = okEvts.map(e => e.dtLastOk).filter(v => v >= 0).sort((a, b) => a - b);
+  document.getElementById('dtMin').textContent = dts.length ? dts[0] : '-';
+  document.getElementById('dtMed').textContent = dts.length ? Math.round(median(dts)) : '-';
+  document.getElementById('dtP90').textContent = dts.length ? percentile(dts, 90) : '-';
+  document.getElementById('dtMax').textContent = dts.length ? dts[dts.length - 1] : '-';
+  drawHistogram('chartDt', dts, '#5b8cff');
+
+  // "eco": eventos BAD que llegan poco despues de un evento aceptado anterior (OK o BAD)
+  const accepted = evts.filter(e => e.result === 'OK' || e.result === 'BAD')
+                        .sort((a, b) => a.t - b.t);
+  const echoGaps = [];
+  for (let i = 1; i < accepted.length; i++) {
+    if (accepted[i].result === 'BAD') {
+      const gap = accepted[i].t - accepted[i - 1].t;
+      if (gap >= 0 && gap < 3000) echoGaps.push(gap);
+    }
+  }
+  // tambien contamos los COOLDOWN (ya filtrados por el firmware) como evidencia
+  // de que el cooldown actual SI hacia falta en ese punto
+  const cdGaps = [];
+  for (const cd of cdEvts) {
+    let prevT = null;
+    for (const a of accepted) { if (a.t <= cd.t) prevT = a.t; else break; }
+    if (prevT !== null) cdGaps.push(cd.t - prevT);
+  }
+  const echoSorted = echoGaps.slice().sort((a, b) => a - b);
+  document.getElementById('echoCount').textContent = echoGaps.length;
+  document.getElementById('echoP90').textContent = echoSorted.length ? percentile(echoSorted, 90) : '-';
+  document.getElementById('echoMax').textContent = echoSorted.length ? echoSorted[echoSorted.length - 1] : '-';
+  drawHistogram('chartEcho', echoGaps, '#ff6b6b');
+
+  // Recomendacion de cooldown
+  const recEl = document.getElementById('recValue');
+  const reasonEl = document.getElementById('recReason');
+  const currentCooldown = dones.length ? dones[dones.length - 1].cooldownMs : null;
+
+  if (echoGaps.length === 0 && cdGaps.length === 0) {
+    recEl.textContent = currentCooldown ? currentCooldown : '400-600';
+    reasonEl.innerHTML = 'No se ven falsos positivos con patron de "eco" cerca de un gesto real. '
+      + (currentCooldown ? `El cooldown actual (${currentCooldown}ms) parece suficiente, no hace falta subirlo.` : 'Corre el juego para tener datos.');
+  } else {
+    const allGaps = echoGaps.concat(cdGaps).sort((a, b) => a - b);
+    const suggested = Math.min(1200, Math.round((percentile(allGaps, 90) || 0) + 80));
+    recEl.textContent = suggested;
+    let reason = `Se detectaron ${echoGaps.length} falso(s) positivo(s) tipo "eco" (BAD justo despues de un gesto real) `;
+    if (cdGaps.length) reason += `y ${cdGaps.length} evento(s) que el cooldown actual ya filtro correctamente. `;
+    reason += `El percentil 90 de esas brechas es ${percentile(allGaps, 90)}ms, asi que ${suggested}ms deberia cubrir la mayoria sin bloquear gestos reales `;
+    if (dts.length) {
+      reason += `(el tiempo tipico entre gestos reales es de ~${Math.round(median(dts))}ms, mediana, asi que si subes el cooldown mucho mas de eso vas a empezar a comerte gestos validos).`;
+    } else {
+      reason += `(genera mas datos jugando otra secuencia para afinar esto mejor).`;
+    }
+    reasonEl.textContent = reason;
+  }
+
+  // Calibracion inicial
+  const panelCalib = document.getElementById('panelCalib');
+  if (calib.length) {
+    panelCalib.style.display = 'block';
+    const groups = [];
+    let current = null;
+    for (const c of calib) {
+      if (!current || current.expected !== c.expected || current.done) {
+        current = { expected: c.expected, attempts: 0, fails: 0, done: false };
+        groups.push(current);
+      }
+      current.attempts++;
+      if (c.detected === c.expected) {
+        current.done = true;
+      } else {
+        current.fails++;
+      }
+    }
+    document.getElementById('tblCalib').innerHTML = groups.map(g => `
+      <tr>
+        <td>${dirNames[g.expected] || g.expected}</td>
+        <td>${g.attempts}</td>
+        <td class="${g.fails > 0 ? 'warn' : 'good'}">${g.fails}</td>
+      </tr>`).join('');
+  } else {
+    panelCalib.style.display = 'none';
+  }
+
+  // Tabla de secuencias
+  const tblSeqs = document.getElementById('tblSeqs');
+  tblSeqs.innerHTML = dones.map(d => `
+    <tr>
+      <td>${d.seqId}</td>
+      <td class="good">${d.ok}</td>
+      <td class="bad">${d.bad}</td>
+      <td>${d.timeout}</td>
+      <td>${(d.durationMs / 1000).toFixed(1)}</td>
+      <td>${d.cooldownMs}ms</td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty">Sin secuencias completas (GAME_DONE) en el log</td></tr>';
+
+  // Tabla de eventos
+  const tagClass = { OK: 'tag-ok', BAD: 'tag-bad', COOLDOWN: 'tag-cooldown', TIMEOUT: 'tag-timeout' };
+  const tblEvts = document.getElementById('tblEvts');
+  tblEvts.innerHTML = evts.slice(-500).map(e => `
+    <tr>
+      <td>${e.t}</td>
+      <td>${e.seqId}</td>
+      <td>${e.step + 1}</td>
+      <td>${dirNames[e.expected] || e.expected}</td>
+      <td>${dirNames[e.detected] || e.detected}</td>
+      <td><span class="tag ${tagClass[e.result] || ''}">${e.result}</span></td>
+      <td>${e.dtLastOk >= 0 ? e.dtLastOk + 'ms' : '-'}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="empty">Sin eventos (GAME_EVT) en el log</td></tr>';
+
+  // MPU / BMP
+  if (mpu.length) {
+    const last = mpu[mpu.length - 1];
+    document.getElementById('mpuRoll').textContent = last.roll.toFixed(1) + ' deg';
+    document.getElementById('mpuPitch').textContent = last.pitch.toFixed(1) + ' deg';
+    document.getElementById('mpuYaw').textContent = last.yaw.toFixed(1) + ' deg';
+    document.getElementById('mpuCount').textContent = mpu.length;
+  }
+  if (bmp.length) {
+    const last = bmp[bmp.length - 1];
+    document.getElementById('bmpTemp').textContent = last.temp.toFixed(1) + ' C';
+    document.getElementById('bmpPres').textContent = last.pres.toFixed(1) + ' hPa';
+    document.getElementById('bmpAlt').textContent = last.alt.toFixed(1) + ' m';
+    document.getElementById('bmpCount').textContent = bmp.length;
+  }
+}
+
+document.getElementById('btnAnalyze').addEventListener('click', () => {
+  const text = document.getElementById('log').value;
+  const data = parseLog(text);
+  render(data);
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  document.getElementById('log').value = '';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('emptyMsg').style.display = 'block';
+});
+
+// --- Web Serial opcional (Chrome/Edge, requiere https o localhost, o el
+// archivo abierto localmente con file:// tambien funciona en Chrome) ---
+const btnSerial = document.getElementById('btnSerial');
+const serialStatus = document.getElementById('serialStatus');
+
+if (!('serial' in navigator)) {
+  btnSerial.disabled = true;
+  serialStatus.textContent = 'Web Serial no disponible en este navegador (usa Chrome o Edge), pega el log manualmente.';
+} else {
+  let port = null, reading = false;
+  btnSerial.addEventListener('click', async () => {
+    if (reading) { return; }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      reading = true;
+      serialStatus.textContent = 'Conectado. Capturando...';
+      btnSerial.textContent = 'Capturando...';
+      btnSerial.disabled = true;
+
+      const textDecoder = new TextDecoderStream();
+      port.readable.pipeTo(textDecoder.writable);
+      const reader = textDecoder.readable.getReader();
+      const logEl = document.getElementById('log');
+      let buffer = '';
+
+      while (reading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        logEl.value += value;
+        logEl.scrollTop = logEl.scrollHeight;
+        // re-analiza en vivo cada tanto
+        if (buffer.length > 2000) {
+          render(parseLog(logEl.value));
+          buffer = '';
+        }
+      }
+    } catch (err) {
+      serialStatus.textContent = 'Error: ' + err.message;
+      btnSerial.textContent = 'Conectar por USB (Web Serial)';
+      btnSerial.disabled = false;
+      reading = false;
+    }
+  });
+}
+</script>
+
+</body>
+</html>

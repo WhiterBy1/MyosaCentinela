@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MyosaCentinela - Dashboard de monitoreo</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171d2e; --panel2: #1e2740; --text: #e8ecf5;
+    --muted: #8a92a8; --accent: #5b8cff; --good: #3ecf8e; --bad: #ff6b6b;
+    --warn: #ffb84d; --border: #2a3350;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    margin: 0; padding: 20px; line-height: 1.4;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+  }
+  h1 { font-size: 19px; margin: 0; }
+  h1 .sub { color: var(--muted); font-weight: 400; font-size: 12px; display: block; margin-top: 2px; }
+  h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px;
+    border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--panel2);
+    border: 1px solid var(--border);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .dot.off { background: var(--bad); }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 9px 15px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: rgba(255,107,107,0.15); color: var(--bad); border: 1px solid rgba(255,107,107,0.4); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+  .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .metric .val { font-size: 26px; font-weight: 700; }
+  .metric .unit { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .metric .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+  canvas { width: 100%; background: #0b0f18; border: 1px solid var(--border); border-radius: 8px; display: block; }
+  .bubble-wrap { display: flex; justify-content: center; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .scroll { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .tag-ok { background: rgba(62,207,142,0.18); color: var(--good); }
+  .tag-warn { background: rgba(255,184,77,0.18); color: var(--warn); }
+  .tag-bad { background: rgba(255,107,107,0.18); color: var(--bad); }
+  .alert-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .alert-row:last-child { border-bottom: none; }
+  .empty { color: var(--muted); font-size: 13px; padding: 16px; text-align: center; }
+  .stat-inline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .stat-inline b { color: var(--text); }
+  textarea {
+    width: 100%; height: 120px; background: #0b0f18; color: #cfe0ff;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: Consolas, monospace; font-size: 12px; resize: vertical; margin-top: 8px;
+  }
+  code { background: #0b0f18; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MyosaCentinela &mdash; Monitoreo en vivo
+    <span class="sub">Simula el enlace LoRa via USB/UART mientras no está el radio &middot; dashboard de supervisor</span>
+  </h1>
+  <div class="controls">
+    <span class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">Desconectado</span></span>
+    <button id="btnConnect">Conectar dispositivo (USB)</button>
+    <button id="btnRecord" class="secondary" disabled>Pausar registro</button>
+    <button id="btnCsvTlm" class="secondary">Descargar telemetria CSV</button>
+    <button id="btnCsvEvt" class="secondary">Descargar eventos CSV</button>
+    <button id="btnReset" class="danger">Reiniciar sesion</button>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="panel metric">
+    <div class="val" id="mRoll">--</div><div class="unit">grados roll</div>
+    <div class="lbl">Orientacion</div>
+  </div>
+  <div class="panel metric">
+    <div class="val" id="mPitch">--</div><div class="unit">grados pitch</div>
+    <div class="lbl">Orientacion</div>
+  </div>
+  <div class="panel metric">
+    <div class="val" id="mTemp">--</div><div class="unit">C</div>
+    <div class="lbl">Temperatura</div>
+  </div>
+  <div class="panel metric">
+    <div class="val" id="mPres">--</div><div class="unit">hPa</div>
+    <div class="lbl">Presion</div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Orientacion en vivo (roll / pitch)</h2>
+    <canvas id="chartOrient" height="150"></canvas>
+    <div class="stat-inline">
+      <span>Yaw: <b id="mYaw">--</b> deg</span>
+      <span>Altitud: <b id="mAlt">--</b> m</span>
+      <span>Proximidad: <b id="mProx">--</b></span>
+      <span>Luz: <b id="mLight">--</b></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Nivel (bubble)</h2>
+    <div class="bubble-wrap"><canvas id="bubble" width="180" height="180" style="width:180px;height:180px;"></canvas></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Magnitud de aceleracion (deteccion de impactos/caidas, regla simple)</h2>
+    <canvas id="chartAccel" height="130"></canvas>
+  </div>
+  <div class="panel">
+    <h2>Alertas</h2>
+    <div id="alertList" class="empty">Sin alertas por ahora</div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Diagnostico de muestreo</h2>
+    <div class="stat-inline" style="flex-direction:column; gap:8px;">
+      <span>Frecuencia objetivo (firmware): <b id="dTargetHz">--</b> Hz</span>
+      <span>Frecuencia real (reportada por el ESP32): <b id="dDeviceHz">--</b> Hz</span>
+      <span>Frecuencia real (medida en el navegador): <b id="dBrowserHz">--</b> Hz</span>
+      <span>Intervalo entre muestras: prom <b id="dDtAvg">--</b> ms &middot; min <b id="dDtMin">--</b> ms &middot; max <b id="dDtMax">--</b> ms</span>
+      <span>Jitter (max - min): <b id="dJitter">--</b> ms</span>
+      <span>Saltos de secuencia detectados (lineas de UART perdidas): <b id="dSeqGaps">0</b></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Eventos (gestos detectados)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Hora dispositivo (ms)</th><th>Tipo</th><th>Direccion</th></tr></thead>
+        <tbody id="tblEvt"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Sesion</h2>
+    <div class="stat-inline" style="flex-direction:column; gap:8px;">
+      <span>Muestras de telemetria: <b id="sCount">0</b></span>
+      <span>Eventos capturados: <b id="sEvt">0</b></span>
+      <span>Duracion de sesion: <b id="sDur">0s</b></span>
+      <span>Ultima actualizacion: <b id="sLast">--</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Entrada manual (si no puedes usar Web Serial)</h2>
+  <p style="color:var(--muted); font-size:12px; margin:0 0 4px;">Pega lineas del log (TLM:/EVT:) y presiona "Procesar pegado". Util si el puerto ya lo tiene abierto <code>idf.py monitor</code>.</p>
+  <textarea id="pasteBox" placeholder="Pega aqui lineas TLM:{...} / EVT:{...} copiadas del monitor serie..."></textarea>
+  <div style="margin-top:8px;"><button id="btnPaste" class="secondary">Procesar pegado</button></div>
+</div>
+
+<script>
+const els = {
+  statusDot: document.getElementById('statusDot'),
+  statusText: document.getElementById('statusText'),
+  btnConnect: document.getElementById('btnConnect'),
+  btnRecord: document.getElementById('btnRecord'),
+  btnCsvTlm: document.getElementById('btnCsvTlm'),
+  btnCsvEvt: document.getElementById('btnCsvEvt'),
+  btnReset: document.getElementById('btnReset'),
+  btnPaste: document.getElementById('btnPaste'),
+  pasteBox: document.getElementById('pasteBox'),
+  mRoll: document.getElementById('mRoll'),
+  mPitch: document.getElementById('mPitch'),
+  mYaw: document.getElementById('mYaw'),
+  mTemp: document.getElementById('mTemp'),
+  mPres: document.getElementById('mPres'),
+  mAlt: document.getElementById('mAlt'),
+  mProx: document.getElementById('mProx'),
+  mLight: document.getElementById('mLight'),
+  tblEvt: document.getElementById('tblEvt'),
+  alertList: document.getElementById('alertList'),
+  sCount: document.getElementById('sCount'),
+  sEvt: document.getElementById('sEvt'),
+  sDur: document.getElementById('sDur'),
+  sLast: document.getElementById('sLast'),
+  dTargetHz: document.getElementById('dTargetHz'),
+  dDeviceHz: document.getElementById('dDeviceHz'),
+  dBrowserHz: document.getElementById('dBrowserHz'),
+  dDtAvg: document.getElementById('dDtAvg'),
+  dDtMin: document.getElementById('dDtMin'),
+  dDtMax: document.getElementById('dDtMax'),
+  dJitter: document.getElementById('dJitter'),
+  dSeqGaps: document.getElementById('dSeqGaps'),
+};
+
+// --- Estado de la sesion ---
+let session = {
+  tlm: [],       // {t, seq, dt_us, roll, pitch, yaw, ax, ay, az, temp, pres, alt, prox, light, recvAt, recvDtMs}
+  events: [],    // {t, type, dir, recvAt}
+  recording: true,
+  startedAt: null,
+};
+const ROLLING_WINDOW = 300; // puntos visibles en las graficas (~15s a 20Hz)
+
+// --- Diagnostico de muestreo ---
+let diag = {
+  lastSeq: null,
+  seqGaps: 0,
+  lastRecvAt: null,
+  dtUsWindow: [],   // dt_us reportado por el propio ESP32 (ventana reciente)
+  recvDtWindow: [], // intervalo real medido por el navegador entre mensajes
+};
+const DIAG_WINDOW = 100;
+
+function pushWindow(arr, v, max) {
+  arr.push(v);
+  if (arr.length > max) arr.shift();
+}
+
+function updateDiagFromTlm(obj) {
+  const nowRecv = Date.now();
+
+  if (diag.lastSeq !== null && obj.seq !== undefined) {
+    const expected = diag.lastSeq + 1;
+    if (obj.seq > expected) diag.seqGaps += (obj.seq - expected);
+  }
+  if (obj.seq !== undefined) diag.lastSeq = obj.seq;
+
+  if (obj.dt_us && obj.dt_us > 0) pushWindow(diag.dtUsWindow, obj.dt_us / 1000, DIAG_WINDOW);
+  if (diag.lastRecvAt !== null) pushWindow(diag.recvDtWindow, nowRecv - diag.lastRecvAt, DIAG_WINDOW);
+  diag.lastRecvAt = nowRecv;
+
+  renderDiag();
+}
+
+function renderDiag() {
+  const dt = diag.dtUsWindow;
+  const rd = diag.recvDtWindow;
+  if (dt.length) {
+    const avg = dt.reduce((a, b) => a + b, 0) / dt.length;
+    const min = Math.min(...dt), max = Math.max(...dt);
+    els.dDtAvg.textContent = avg.toFixed(1);
+    els.dDtMin.textContent = min.toFixed(1);
+    els.dDtMax.textContent = max.toFixed(1);
+    els.dJitter.textContent = (max - min).toFixed(1);
+    els.dDeviceHz.textContent = (1000 / avg).toFixed(1);
+  }
+  if (rd.length) {
+    const avgRecv = rd.reduce((a, b) => a + b, 0) / rd.length;
+    els.dBrowserHz.textContent = (1000 / avgRecv).toFixed(1);
+  }
+  els.dSeqGaps.textContent = diag.seqGaps;
+}
+const dirNames = { 'ARRIBA':'ARRIBA', 'ABAJO':'ABAJO', 'IZQUIERDA':'IZQUIERDA', 'DERECHA':'DERECHA' };
+
+function setStatus(live) {
+  els.statusDot.className = 'dot ' + (live ? 'live' : 'off');
+  els.statusText.textContent = live ? 'Conectado - recibiendo datos' : 'Desconectado';
+}
+
+function fmtDur(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return m > 0 ? `${m}m ${ss}s` : `${ss}s`;
+}
+
+function handleLine(line) {
+  line = line.trim();
+  if (!line) return;
+
+  let idx;
+  if ((idx = line.indexOf('TLM:')) >= 0) {
+    try {
+      const obj = JSON.parse(line.slice(idx + 4));
+      obj.recvAt = Date.now();
+      updateDiagFromTlm(obj);
+      if (session.recording) {
+        if (!session.startedAt) session.startedAt = obj.recvAt;
+        session.tlm.push(obj);
+      }
+      renderTelemetry(obj);
+    } catch (e) { /* linea incompleta, ignorar */ }
+  } else if ((idx = line.indexOf('RATE:')) >= 0) {
+    try {
+      const obj = JSON.parse(line.slice(idx + 5));
+      els.dTargetHz.textContent = obj.target_hz.toFixed(1);
+      // dDeviceHz tambien se puede refrescar directo con el valor que
+      // reporta el propio ESP32 (independiente del calculo local por dt_us)
+      els.dDeviceHz.textContent = obj.tlm_hz.toFixed(1);
+    } catch (e) { /* ignorar */ }
+  } else if ((idx = line.indexOf('EVT:')) >= 0) {
+    try {
+      const obj = JSON.parse(line.slice(idx + 4));
+      obj.recvAt = Date.now();
+      if (session.recording) {
+        if (!session.startedAt) session.startedAt = obj.recvAt;
+        session.events.push(obj);
+      }
+      renderEvent(obj);
+    } catch (e) { /* ignorar */ }
+  }
+  // CALIB_* y otras lineas se ignoran aqui (son solo del arranque)
+}
+
+function renderTelemetry(obj) {
+  setStatus(true);
+  els.mRoll.textContent = obj.roll.toFixed(1);
+  els.mPitch.textContent = obj.pitch.toFixed(1);
+  els.mYaw.textContent = obj.yaw.toFixed(1);
+  els.mTemp.textContent = obj.temp.toFixed(1);
+  els.mPres.textContent = obj.pres.toFixed(1);
+  els.mAlt.textContent = obj.alt.toFixed(1);
+  els.mProx.textContent = obj.prox;
+  els.mLight.textContent = obj.light;
+  els.sLast.textContent = new Date().toLocaleTimeString();
+  els.sCount.textContent = session.tlm.length;
+  if (session.startedAt) els.sDur.textContent = fmtDur(Date.now() - session.startedAt);
+
+  drawBubble(obj.roll, obj.pitch);
+  drawOrientChart();
+  drawAccelChart();
+  checkAlerts(obj);
+}
+
+function renderEvent(obj) {
+  els.sEvt.textContent = session.events.length;
+  const tbody = els.tblEvt;
+  const row = document.createElement('tr');
+  row.innerHTML = `<td>${obj.t}</td><td><span class="tag tag-ok">${obj.type}</span></td><td>${dirNames[obj.dir] || obj.dir}</td>`;
+  tbody.insertBefore(row, tbody.firstChild);
+  while (tbody.rows.length > 200) tbody.deleteRow(tbody.rows.length - 1);
+}
+
+// --- Alertas simples (reglas temporales, hasta tener un modelo real de
+// deteccion de anomalias entrenado con los datos capturados aqui) ---
+let lastAlertAt = 0;
+function checkAlerts(obj) {
+  const mag = Math.sqrt(obj.ax * obj.ax + obj.ay * obj.ay + obj.az * obj.az);
+  const alerts = [];
+  if (mag > 1.8) alerts.push({ level: 'bad', text: `Posible impacto: magnitud de aceleracion ${mag.toFixed(2)}g` });
+  else if (mag < 0.3) alerts.push({ level: 'warn', text: `Posible caida libre: magnitud de aceleracion ${mag.toFixed(2)}g` });
+  if (Math.abs(obj.roll) > 60 || Math.abs(obj.pitch) > 60) {
+    alerts.push({ level: 'warn', text: `Inclinacion extrema: roll ${obj.roll.toFixed(0)} deg, pitch ${obj.pitch.toFixed(0)} deg` });
+  }
+
+  if (alerts.length === 0) {
+    if (Date.now() - lastAlertAt > 5000) {
+      els.alertList.innerHTML = '<div class="empty">Sin alertas por ahora</div>';
+    }
+    return;
+  }
+  lastAlertAt = Date.now();
+  els.alertList.innerHTML = alerts.map(a => `
+    <div class="alert-row">
+      <span class="tag ${a.level === 'bad' ? 'tag-bad' : 'tag-warn'}">${a.level === 'bad' ? 'ALERTA' : 'AVISO'}</span>
+      <span>${a.text}</span>
+    </div>`).join('');
+}
+
+// --- Bubble level ---
+function drawBubble(roll, pitch) {
+  const c = document.getElementById('bubble');
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, cx = w / 2, cy = h / 2, r = w / 2 - 10;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#2a3350'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
+
+  const scale = r / 45; // 45 grados llega al borde
+  let bx = cx + Math.max(-r, Math.min(r, roll * scale));
+  let by = cy + Math.max(-r, Math.min(r, pitch * scale));
+  const dist = Math.hypot(bx - cx, by - cy);
+  const inRange = dist <= r + 8;
+
+  ctx.fillStyle = inRange ? '#5b8cff' : '#ff6b6b';
+  ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#0b0f18'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// --- Graficas de series (canvas propio, sin dependencias) ---
+function drawSeriesChart(canvasId, series) {
+  // series: [{ data:[...numbers], color:'#...' }, ...]
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.clientWidth || 400, h = canvas.clientHeight || 150;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0, 0, w, h);
+
+  let allVals = [];
+  series.forEach(s => allVals = allVals.concat(s.data));
+  if (allVals.length < 2) {
+    ctx.fillStyle = '#8a92a8'; ctx.font = '12px sans-serif';
+    ctx.fillText('Esperando datos...', 10, h / 2);
+    return;
+  }
+  const min = Math.min(...allVals), max = Math.max(...allVals);
+  const range = (max - min) || 1;
+  const pad = 8;
+
+  // linea cero de referencia si aplica
+  series.forEach(s => {
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    s.data.forEach((v, i) => {
+      const x = pad + (i / (ROLLING_WINDOW - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = '#8a92a8'; ctx.font = '10px sans-serif';
+  ctx.fillText(max.toFixed(1), 4, 12);
+  ctx.fillText(min.toFixed(1), 4, h - 4);
+}
+
+function lastN(arr, n, mapper) {
+  const slice = arr.slice(-n);
+  return slice.map(mapper);
+}
+
+function drawOrientChart() {
+  drawSeriesChart('chartOrient', [
+    { data: lastN(session.tlm, ROLLING_WINDOW, d => d.roll), color: '#5b8cff' },
+    { data: lastN(session.tlm, ROLLING_WINDOW, d => d.pitch), color: '#ffb84d' },
+  ]);
+}
+
+function drawAccelChart() {
+  drawSeriesChart('chartAccel', [
+    { data: lastN(session.tlm, ROLLING_WINDOW, d => Math.sqrt(d.ax * d.ax + d.ay * d.ay + d.az * d.az)), color: '#3ecf8e' },
+  ]);
+}
+
+// --- Descarga CSV ---
+function download(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+els.btnCsvTlm.addEventListener('click', () => {
+  const header = 't_ms,seq,dt_us,roll,pitch,yaw,ax,ay,az,temp,pres,alt,prox,light,recibido_en\n';
+  const rows = session.tlm.map(d =>
+    `${d.t},${d.seq ?? ''},${d.dt_us ?? ''},${d.roll},${d.pitch},${d.yaw},${d.ax},${d.ay},${d.az},${d.temp},${d.pres},${d.alt},${d.prox},${d.light},${new Date(d.recvAt).toISOString()}`
+  ).join('\n');
+  download(`myosa_telemetria_${Date.now()}.csv`, header + rows);
+});
+
+els.btnCsvEvt.addEventListener('click', () => {
+  const header = 't_ms,tipo,direccion,recibido_en\n';
+  const rows = session.events.map(d =>
+    `${d.t},${d.type},${d.dir},${new Date(d.recvAt).toISOString()}`
+  ).join('\n');
+  download(`myosa_eventos_${Date.now()}.csv`, header + rows);
+});
+
+els.btnReset.addEventListener('click', () => {
+  if (!confirm('Esto borra los datos de la sesion actual (si no los descargaste, se pierden). Continuar?')) return;
+  session = { tlm: [], events: [], recording: true, startedAt: null };
+  diag = { lastSeq: null, seqGaps: 0, lastRecvAt: null, dtUsWindow: [], recvDtWindow: [] };
+  els.tblEvt.innerHTML = '';
+  els.sCount.textContent = '0'; els.sEvt.textContent = '0'; els.sDur.textContent = '0s';
+  els.alertList.innerHTML = '<div class="empty">Sin alertas por ahora</div>';
+  els.dDtAvg.textContent = '--'; els.dDtMin.textContent = '--'; els.dDtMax.textContent = '--';
+  els.dJitter.textContent = '--'; els.dSeqGaps.textContent = '0';
+  els.btnRecord.textContent = 'Pausar registro';
+});
+
+els.btnRecord.addEventListener('click', () => {
+  session.recording = !session.recording;
+  els.btnRecord.textContent = session.recording ? 'Pausar registro' : 'Reanudar registro';
+});
+
+els.btnPaste.addEventListener('click', () => {
+  const lines = els.pasteBox.value.split('\n');
+  lines.forEach(handleLine);
+});
+
+// --- Web Serial ---
+if (!('serial' in navigator)) {
+  els.btnConnect.disabled = true;
+  els.btnConnect.textContent = 'Web Serial no disponible (usa Chrome/Edge)';
+} else {
+  let port = null, reading = false;
+  els.btnConnect.addEventListener('click', async () => {
+    if (reading) {
+      reading = false;
+      try { await port.close(); } catch (e) {}
+      setStatus(false);
+      els.btnConnect.textContent = 'Conectar dispositivo (USB)';
+      els.btnRecord.disabled = true;
+      return;
+    }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      reading = true;
+      els.btnConnect.textContent = 'Desconectar';
+      els.btnRecord.disabled = false;
+      setStatus(true);
+
+      const textDecoder = new TextDecoderStream();
+      const readableClosed = port.readable.pipeTo(textDecoder.writable);
+      const reader = textDecoder.readable.getReader();
+      let buffer = '';
+
+      while (reading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        let nl;
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, nl);
+          buffer = buffer.slice(nl + 1);
+          handleLine(line);
+        }
+      }
+      reader.releaseLock();
+      await readableClosed.catch(() => {});
+    } catch (err) {
+      alert('Error de conexion: ' + err.message);
+      reading = false;
+      els.btnConnect.textContent = 'Conectar dispositivo (USB)';
+      setStatus(false);
+    }
+  });
+}
+
+setStatus(false);
+</script>
+
+</body>
+</html>
